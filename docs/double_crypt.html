@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>double_crypt – README</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2em auto;
+      max-width: 800px;
+      line-height: 1.6;
+    }
+    code, pre {
+      background-color: #f8f8f8;
+      padding: 0.2em 0.4em;
+      font-family: "Courier New", monospace;
+      font-size: 90%;
+    }
+    h1, h2, h3 {
+      color: #2c3e50;
+    }
+    a {
+      color: #2980b9;
+    }
+  </style>
+</head>
+<body>
+
+<h1>double_crypt</h1>
+
+<p>
+  <strong>double_crypt</strong> is a command-line utility (CLI) written in <a href="https://www.rust-lang.org/" target="_blank">Rust</a> that performs
+  <em>double encryption</em> or <em>double decryption</em> on a file <strong>in place</strong>, using:
+</p>
+
+<ul>
+  <li><strong>AES-256-GCM-SIV</strong> (first stage)</li>
+  <li><strong>XChaCha20-Poly1305</strong> (second stage)</li>
+</ul>
+
+<p>
+  This approach is sometimes referred to as a “belt and suspenders” strategy, providing two layers of authenticated encryption. 
+  The program uses a memory-safe sequence of operations and performs an atomic overwrite of the original file, which avoids partial-file corruption 
+  if an error occurs mid-write.
+</p>
+
+<hr>
+
+<h2>1. Features</h2>
+
+<ul>
+  <li><strong>Double encryption:</strong> first AES-256-GCM-SIV, then XChaCha20-Poly1305.</li>
+  <li><strong>In-memory:</strong> loads the file fully into memory for encryption/decryption (requires enough RAM).</li>
+  <li><strong>Atomic overwrite:</strong> writes to <code>.tmp</code> file and then renames over the original, ensuring consistency.</li>
+  <li><strong>Zeroization:</strong> uses <code>zeroize</code> to securely wipe secrets from memory once they’re no longer needed.</li>
+</ul>
+
+<hr>
+
+<h2>2. Requirements</h2>
+
+<p>You’ll need the following:</p>
+<ul>
+  <li><strong>Rust</strong> toolchain (1.60+), installed via <a href="https://rustup.rs/" target="_blank">rustup</a>.</li>
+  <li><strong>32-byte key</strong> files:
+    <ul>
+      <li><code>a.key</code> &mdash; 32-byte key for AES-256-GCM-SIV</li>
+      <li><code>x.key</code> &mdash; 32-byte key for XChaCha20-Poly1305</li>
+    </ul>
+  </li>
+</ul>
+
+<p>
+  The keys must be placed in the same directory where the <code>double_crypt</code> binary is run. 
+  Each file must contain exactly 32 bytes.
+</p>
+
+<hr>
+
+<h2>3. Building</h2>
+
+<p>To compile the app from source, clone or download the repository and run:</p>
+<pre><code>cargo build --release
+</code></pre>
+<p>This will produce the binary at <code>./target/release/double_crypt</code>.</p>
+
+<hr>
+
+<h2>4. Usage</h2>
+
+<p>The CLI syntax is as follows:</p>
+<pre><code>double_crypt [--E | --D] &lt;file&gt;
+</code></pre>
+
+<ul>
+  <li><code>--E</code> (or <code>-E</code>): Encrypt the file.</li>
+  <li><code>--D</code> (or <code>-D</code>): Decrypt the file.</li>
+  <li><code>&lt;file&gt;</code>: Path to the file to encrypt/decrypt.</li>
+</ul>
+
+<p>
+  <strong>Note:</strong> You must supply either <code>--E</code> or <code>--D</code>, but not both.
+  The file is a positional argument (required).
+</p>
+
+<h3>Example: Encrypting a File</h3>
+<pre><code>./double_crypt --E secret.txt
+</code></pre>
+<p>
+  This reads <code>secret.txt</code> into memory, encrypts it twice (AES-256-GCM-SIV + XChaCha20-Poly1305),
+  writes the result to a <code>.tmp</code> file, then renames it to <code>secret.txt</code>.
+</p>
+
+<h3>Example: Decrypting a File</h3>
+<pre><code>./double_crypt --D secret.txt
+</code></pre>
+<p>
+  This reverses the process: first XChaCha20-Poly1305 is removed, then AES-256-GCM-SIV is removed. The file becomes plaintext again.
+</p>
+
+<hr>
+
+<h2>5. Format of Encrypted File</h2>
+
+<p>The final encrypted file structure is:</p>
+<pre>
+24-byte XChaCha nonce + 
+  XChaCha20-Poly1305 ciphertext of:
+    12-byte AES nonce +
+    AES-256-GCM-SIV ciphertext and tag
+</pre>
+
+<p>
+  Each encryption step prepends its nonce to the message so that decryption can reverse the process. 
+  Random nonces are generated via <code>OsRng</code> each time you encrypt.
+</p>
+
+<hr>
+
+<h2>6. Security Notes</h2>
+
+<ul>
+  <li>This tool is intended as a demonstration of double encryption with two authenticated ciphers.</li>
+  <li>Both AES-GCM-SIV and XChaCha20-Poly1305 are considered <em>misuse-resistant</em> AEADs, but you must still handle keys carefully.</li>
+  <li>Ensure your <code>a.key</code> and <code>x.key</code> remain secret and have adequate entropy (32 truly random bytes each).</li>
+  <li>While the code attempts to zeroize sensitive buffers, memory safety depends on the Rust environment and OS specifics.</li>
+  <li>This code is <strong>not</strong> audited. For highly sensitive use cases, consider a formal audit and additional protections (hardware enclaves, secure key management, etc.).</li>
+</ul>
+
+<hr>
+
+<h2>7. License and Disclaimer</h2>
+
+<p>
+  This sample code is provided <strong>as is</strong>, without any warranties. 
+  You are solely responsible for assessing its security for your own use cases.
+</p>
+
+</body>
+</html>
+
